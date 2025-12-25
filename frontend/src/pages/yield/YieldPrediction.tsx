@@ -10,19 +10,12 @@ import { TrendingUp, Leaf, MapPin, Droplet, Sprout, FlaskConical } from 'lucide-
 export function YieldPrediction() {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
-    cropName: '',
-    soilType: '',
-    landSize: '',
-    fertilizerUsage: '',
-    previousYield: '',
-    location: '',
-    irrigationType: '',
-    rainfall: '',
-    temperature: '',
-    nitrogen: '',
-    phosphorus: '',
-    potassium: '',
-    ph: '',
+    District: '',
+    Year: new Date().getFullYear().toString(),
+    avg_rainfall: '',
+    avg_temperature: '',
+    Crop: '',
+    soil_quality: '',
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -63,223 +56,127 @@ export function YieldPrediction() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Crop Information */}
+            {/* General Information */}
             <div>
               <h4 className="mb-4 flex items-center gap-2">
-                <Sprout className="w-5 h-5 text-primary" />
-                Crop Information
+                <MapPin className="w-5 h-5 text-primary" />
+                Location & Timeline
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="cropName">Crop Name *</Label>
+                  <Label htmlFor="District">District *</Label>
                   <Select
-                    id="cropName"
-                    name="cropName"
-                    value={formData.cropName}
+                    id="District"
+                    name="District"
+                    value={formData.District}
+                    onChange={handleChange}
+                    required
+                  >
+                    <option value="">Select District</option>
+                    {[
+                      'Attock', 'Bahawalnagar', 'Bahawalpur', 'Bhakkar', 'Cahkwal', 'Chakwal',
+                      'D.G.khan', 'Faisalabad', 'Gujranwala', 'Gujrat', 'Hafizabad', 'Islamabad',
+                      'Jhang', 'Jhelum', 'Kasur', 'Khanewal', 'Khushab', 'Lahore', 'Layyah',
+                      'Lodhran', 'M.B.Din', 'Mianwali', 'Multan', 'Muzaffargarh', 'Nankana Sahib',
+                      'Narowal', 'Okara', 'Pakpattan', 'R.Y.Khan', 'Rahim Yar Khan', 'Rajanpur',
+                      'Rawalpindi', 'Sahiwal', 'Sargodha', 'Sheikhupura', 'Sialkot', 'T.T. Singh',
+                      'T.T.Singh', 'Vehari'
+                    ].sort().map(dist => (
+                      <option key={dist} value={dist}>{dist}</option>
+                    ))}
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="Year">Year *</Label>
+                  <Input
+                    id="Year"
+                    name="Year"
+                    type="number"
+                    placeholder="e.g., 2024"
+                    value={formData.Year}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Crop & Soil */}
+            <div>
+              <h4 className="mb-4 flex items-center gap-2">
+                <Sprout className="w-5 h-5 text-primary" />
+                Crop & Soil Quality
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="Crop">Crop *</Label>
+                  <Select
+                    id="Crop"
+                    name="Crop"
+                    value={formData.Crop}
                     onChange={handleChange}
                     required
                   >
                     <option value="">Select Crop</option>
-                    <option value="Wheat">Wheat</option>
-                    <option value="Rice">Rice</option>
                     <option value="Cotton">Cotton</option>
                     <option value="Maize">Maize</option>
+                    <option value="Rice">Rice</option>
                     <option value="Sugarcane">Sugarcane</option>
-                    <option value="Soybean">Soybean</option>
-                    <option value="Pulses">Pulses</option>
+                    <option value="Wheat">Wheat</option>
                   </Select>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="landSize">Land Size (acres) *</Label>
-                  <Input
-                    id="landSize"
-                    name="landSize"
-                    type="number"
-                    placeholder="e.g., 25"
-                    value={formData.landSize}
-                    onChange={handleChange}
-                    required
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="previousYield">Previous Yield (kg/acre)</Label>
-                  <Input
-                    id="previousYield"
-                    name="previousYield"
-                    type="number"
-                    placeholder="e.g., 4500"
-                    value={formData.previousYield}
-                    onChange={handleChange}
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Soil & Location */}
-            <div>
-              <h4 className="mb-4 flex items-center gap-2">
-                <MapPin className="w-5 h-5 text-primary" />
-                Soil & Location Details
-              </h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="soilType">Soil Type *</Label>
+                  <Label htmlFor="soil_quality">Soil Quality *</Label>
                   <Select
-                    id="soilType"
-                    name="soilType"
-                    value={formData.soilType}
+                    id="soil_quality"
+                    name="soil_quality"
+                    value={formData.soil_quality}
                     onChange={handleChange}
                     required
                   >
-                    <option value="">Select Soil Type</option>
-                    <option value="Loamy">Loamy</option>
-                    <option value="Clay">Clay</option>
-                    <option value="Sandy">Sandy</option>
-                    <option value="Sandy Loam">Sandy Loam</option>
-                    <option value="Silt">Silt</option>
-                    <option value="Red Soil">Red Soil</option>
-                    <option value="Black Soil">Black Soil</option>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="location">Location *</Label>
-                  <Select
-                    id="location"
-                    name="location"
-                    value={formData.location}
-                    onChange={handleChange}
-                    required
-                  >
-                    <option value="">Select Province</option>
-                    <option value="Punjab">Punjab</option>
-                    <option value="Sindh">Sindh</option>
-                    <option value="KPK">KPK</option>
-                    <option value="Balochistan">Balochistan</option>
-                    <option value="Gilgit-Baltistan">Gilgit-Baltistan</option>
-                    <option value="Azad Kashmir">Azad Kashmir</option>
+                    <option value="">Select Quality</option>
+                    <option value="Good">Good</option>
+                    <option value="Moderate">Moderate</option>
+                    <option value="Poor">Poor</option>
                   </Select>
                 </div>
               </div>
             </div>
 
-            {/* Farming Practices */}
+            {/* Environmental Conditions */}
             <div>
               <h4 className="mb-4 flex items-center gap-2">
                 <Droplet className="w-5 h-5 text-primary" />
-                Farming Practices
+                Environment
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="fertilizerUsage">Fertilizer Usage (kg/acre) *</Label>
+                  <Label htmlFor="avg_rainfall">Average Rainfall (mm) *</Label>
                   <Input
-                    id="fertilizerUsage"
-                    name="fertilizerUsage"
+                    id="avg_rainfall"
+                    name="avg_rainfall"
                     type="number"
-                    placeholder="e.g., 150"
-                    value={formData.fertilizerUsage}
+                    step="0.01"
+                    placeholder="e.g., 600.5"
+                    value={formData.avg_rainfall}
                     onChange={handleChange}
                     required
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="irrigationType">Irrigation Type *</Label>
-                  <Select
-                    id="irrigationType"
-                    name="irrigationType"
-                    value={formData.irrigationType}
+                  <Label htmlFor="avg_temperature">Average Temperature (°C) *</Label>
+                  <Input
+                    id="avg_temperature"
+                    name="avg_temperature"
+                    type="number"
+                    step="0.01"
+                    placeholder="e.g., 28.5"
+                    value={formData.avg_temperature}
                     onChange={handleChange}
                     required
-                  >
-                    <option value="">Select Irrigation</option>
-                    <option value="Drip">Drip Irrigation</option>
-                    <option value="Sprinkler">Sprinkler</option>
-                    <option value="Flood">Flood Irrigation</option>
-                    <option value="Center Pivot">Center Pivot</option>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="rainfall">Average Rainfall (mm)</Label>
-                  <Input
-                    id="rainfall"
-                    name="rainfall"
-                    type="number"
-                    placeholder="e.g., 800"
-                    value={formData.rainfall}
-                    onChange={handleChange}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="temperature">Average Temperature (°C)</Label>
-                  <Input
-                    id="temperature"
-                    name="temperature"
-                    type="number"
-                    placeholder="e.g., 28"
-                    value={formData.temperature}
-                    onChange={handleChange}
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Soil Nutrients */}
-            <div>
-              <h4 className="mb-4 flex items-center gap-2">
-                <FlaskConical className="w-5 h-5 text-primary" />
-                Soil Nutrients
-              </h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="nitrogen">Nitrogen (mg/kg)</Label>
-                  <Input
-                    id="nitrogen"
-                    name="nitrogen"
-                    type="number"
-                    placeholder="e.g., 150"
-                    value={formData.nitrogen}
-                    onChange={handleChange}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="phosphorus">Phosphorus (mg/kg)</Label>
-                  <Input
-                    id="phosphorus"
-                    name="phosphorus"
-                    type="number"
-                    placeholder="e.g., 100"
-                    value={formData.phosphorus}
-                    onChange={handleChange}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="potassium">Potassium (mg/kg)</Label>
-                  <Input
-                    id="potassium"
-                    name="potassium"
-                    type="number"
-                    placeholder="e.g., 200"
-                    value={formData.potassium}
-                    onChange={handleChange}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="ph">pH</Label>
-                  <Input
-                    id="ph"
-                    name="ph"
-                    type="number"
-                    placeholder="e.g., 6.5"
-                    value={formData.ph}
-                    onChange={handleChange}
                   />
                 </div>
               </div>

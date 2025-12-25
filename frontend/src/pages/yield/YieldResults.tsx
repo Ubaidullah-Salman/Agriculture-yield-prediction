@@ -13,68 +13,174 @@ import {
   ArrowLeft,
 } from 'lucide-react';
 
+import jsPDF from 'jspdf';
+// @ts-ignore
+import autoTable from 'jspdf-autotable';
+
 export function YieldResults() {
   const navigate = useNavigate();
   const [predictionData, setPredictionData] = useState<any>(null);
   const [predictedYield, setPredictedYield] = useState(0);
 
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
   useEffect(() => {
-    const data = localStorage.getItem('yieldPredictionData');
-    if (data) {
-      const parsedData = JSON.parse(data);
-      setPredictionData(parsedData);
-      
-      // Mock AI prediction calculation
-      const baseYield = {
-        'Wheat': 4500,
-        'Rice': 5500,
-        'Cotton': 1600,
-        'Maize': 5000,
-        'Sugarcane': 70000,
-        'Soybean': 2200,
-        'Pulses': 1800,
-      }[parsedData.cropName] || 4000;
+    const fetchPrediction = async () => {
+      const data = localStorage.getItem('yieldPredictionData');
+      const token = localStorage.getItem('token');
 
-      // Adjust based on inputs
-      let adjustedYield = baseYield;
-      
-      // Soil type factor
-      const soilFactors: any = {
-        'Loamy': 1.1,
-        'Clay': 0.95,
-        'Sandy': 0.85,
-        'Sandy Loam': 1.0,
-        'Silt': 1.05,
-        'Red Soil': 0.95,
-        'Black Soil': 1.1,
-      };
-      adjustedYield *= soilFactors[parsedData.soilType] || 1.0;
+      if (!data) {
+        navigate('/yield');
+        return;
+      }
 
-      // Irrigation factor
-      const irrigationFactors: any = {
-        'Drip': 1.15,
-        'Sprinkler': 1.1,
-        'Flood': 0.95,
-        'Center Pivot': 1.12,
-      };
-      adjustedYield *= irrigationFactors[parsedData.irrigationType] || 1.0;
+      // Proceed even if no token (backend handles optional auth)
 
-      setPredictedYield(Math.round(adjustedYield));
-    } else {
-      navigate('/yield');
-    }
+      try {
+        const parsedData = JSON.parse(data);
+        setPredictionData(parsedData);
+
+        // Transform data for backend
+        // Validate inputs to avoid NaN errors
+        const validateNumber = (val: any) => {
+          const num = parseFloat(val);
+          return isNaN(num) ? 0 : num;
+        };
+
+        const backendPayload = {
+          "District": parsedData.District,
+          "Year": parsedData.Year,
+          "avg_rainfall": validateNumber(parsedData.avg_rainfall),
+          "avg_temperature": validateNumber(parsedData.avg_temperature),
+          "Crop": parsedData.Crop,
+          "soil_quality": parsedData.soil_quality
+        };
+
+        const headers: any = {
+          'Content-Type': 'application/json'
+        };
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+
+        const response = await fetch('/api/predict/yield', {
+          method: 'POST',
+          headers: headers,
+          body: JSON.stringify(backendPayload)
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.message || `Server error: ${response.status}`);
+        }
+
+        const result = await response.json();
+        setPredictedYield(result.predicted_yield);
+      } catch (err: any) {
+        console.error(err);
+        setError(err.message || 'Failed to calculate yield. Please try again.');
+        // Fallback or keep 0?
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPrediction();
   }, [navigate]);
 
   const handleDownloadReport = () => {
-    alert('PDF report download functionality will be implemented in production version.');
+    try {
+      const doc = new jsPDF();
+
+      // Title
+      doc.setFontSize(22);
+      doc.setTextColor(40, 116, 68); // Brand green
+      doc.text("Yield Prediction Report", 105, 20, { align: 'center' });
+
+      doc.setFontSize(12);
+      doc.setTextColor(0, 0, 0);
+      doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 105, 30, { align: 'center' });
+
+      // Prediction Summary
+      doc.setFontSize(16);
+      doc.setTextColor(40, 116, 68);
+      doc.text("Prediction Summary", 14, 45);
+
+      const totalYield = Math.round(predictedYield * 40 * 1); // 40kg per maund
+
+      autoTable(doc, {
+        startY: 50,
+        head: [['Metric', 'Value']],
+        body: [
+          ['District', predictionData.District],
+          ['Year', predictionData.Year],
+          ['Crop', predictionData.Crop],
+          ['Soil Quality', predictionData.soil_quality],
+          ['Predicted Yield (Per Acre)', `${predictedYield.toFixed(2)} maunds`],
+          ['Predicted Yield (in KG)', `${(predictedYield * 40).toFixed(2)} kg`],
+        ],
+        theme: 'striped',
+        headStyles: { fillColor: [40, 116, 68] }
+      });
+
+      // Farm Details
+      doc.text("Environmental Inputs", 14, (doc as any).lastAutoTable.finalY + 15);
+
+      autoTable(doc, {
+        startY: (doc as any).lastAutoTable.finalY + 20,
+        head: [['Parameter', 'Input Details']],
+        body: [
+          ['Average Rainfall', `${predictionData.avg_rainfall} mm`],
+          ['Average Temperature', `${predictionData.avg_temperature} °C`],
+        ],
+        theme: 'grid',
+        headStyles: { fillColor: [40, 116, 68] }
+      });
+
+      // Recommendations
+      doc.text("Recommendations", 14, (doc as any).lastAutoTable.finalY + 15);
+      doc.setFontSize(10);
+      doc.text(`- Climate: Average temperature of ${predictionData.avg_temperature}°C and rainfall of ${predictionData.avg_rainfall}mm recorded.`, 14, (doc as any).lastAutoTable.finalY + 25);
+      doc.text(`- Crop: Management practices optimized for ${predictionData.Crop}.`, 14, (doc as any).lastAutoTable.finalY + 30);
+      doc.text(`- Soil: maintaining ${predictionData.soil_quality} soil quality is key.`, 14, (doc as any).lastAutoTable.finalY + 35);
+
+      // Footer
+      doc.setFontSize(10);
+      doc.setTextColor(150);
+      doc.text("AgriSmart AI - Empowering Farmers", 105, 290, { align: 'center' });
+
+      doc.save(`${predictionData.cropName}_Yield_Report.pdf`);
+    } catch (err) {
+      console.error("PDF Generation Error:", err);
+      alert("Failed to generate PDF. Please try again.");
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-[60vh] animate-fadeIn">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col justify-center items-center h-[60vh] animate-fadeIn">
+        <h2 className="text-2xl font-bold text-red-500 mb-2">Error</h2>
+        <p className="text-muted-foreground mb-4">{error}</p>
+        <Button onClick={() => navigate('/yield')}>Try Again</Button>
+      </div>
+    );
+  }
 
   if (!predictionData) {
     return null;
   }
 
-  const totalYield = Math.round(predictedYield * parseFloat(predictionData.landSize || 1));
-  const riskLevel = predictedYield > 4500 ? 'Low' : predictedYield > 3500 ? 'Medium' : 'High';
+  const totalYieldKg = Math.round(predictedYield * 40);
+  const riskLevel = predictedYield > 40 ? 'Low' : predictedYield > 25 ? 'Medium' : 'High';
   const riskColor = riskLevel === 'Low' ? 'text-green-500' : riskLevel === 'Medium' ? 'text-yellow-500' : 'text-red-500';
 
   return (
@@ -88,7 +194,7 @@ export function YieldResults() {
           </Button>
           <h1>Yield Prediction Results</h1>
           <p className="text-muted-foreground mt-1">
-            AI-generated analysis for {predictionData.cropName} cultivation
+            AI-generated analysis for {predictionData.Crop} cultivation in {predictionData.District}
           </p>
         </div>
         <Button onClick={handleDownloadReport} size="lg">
@@ -106,18 +212,18 @@ export function YieldResults() {
             </div>
             <h2 className="mb-2">Predicted Yield</h2>
             <div className="text-5xl font-bold text-primary mb-2">
-              {predictedYield.toLocaleString()}
+              {predictedYield.toFixed(2)}
             </div>
-            <p className="text-lg text-muted-foreground mb-4">kg per acre</p>
+            <p className="text-lg text-muted-foreground mb-4">maunds per acre</p>
             <div className="flex items-center justify-center gap-8 text-sm">
               <div>
-                <p className="text-muted-foreground">Total Land</p>
-                <p className="text-xl font-semibold">{predictionData.landSize} acres</p>
+                <p className="text-muted-foreground">Approx. in KG</p>
+                <p className="text-xl font-semibold">{(predictedYield * 40).toFixed(2)} kg</p>
               </div>
               <div className="w-px h-12 bg-border"></div>
               <div>
-                <p className="text-muted-foreground">Total Expected Yield</p>
-                <p className="text-xl font-semibold">{totalYield.toLocaleString()} kg</p>
+                <p className="text-muted-foreground">District</p>
+                <p className="text-xl font-semibold">{predictionData.District}</p>
               </div>
             </div>
           </div>
@@ -181,12 +287,12 @@ export function YieldResults() {
                 </div>
               </div>
               <div>
-                <p className="text-sm font-medium mb-2">Soil Type</p>
-                <p className="text-muted-foreground">{predictionData.soilType}</p>
+                <p className="text-sm font-medium mb-2">Soil Quality</p>
+                <p className="text-muted-foreground">{predictionData.soil_quality}</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">
-                  {predictionData.soilType} soil is well-suited for {predictionData.cropName} cultivation.
+                  The {predictionData.soil_quality} soil quality in {predictionData.District} is factored into this prediction for {predictionData.Crop}.
                 </p>
               </div>
             </div>
@@ -204,16 +310,16 @@ export function YieldResults() {
           <CardContent>
             <div className="space-y-4">
               <div>
-                <p className="text-sm text-muted-foreground mb-2">Efficiency Rating</p>
-                <p className="text-2xl font-bold text-blue-500">Good</p>
+                <p className="text-sm text-muted-foreground mb-2">Environmental Factor</p>
+                <p className="text-2xl font-bold text-blue-500">Monitored</p>
               </div>
               <div>
-                <p className="text-sm font-medium mb-2">Irrigation Type</p>
-                <p className="text-muted-foreground">{predictionData.irrigationType}</p>
+                <p className="text-sm font-medium mb-2">Condition Details</p>
+                <p className="text-muted-foreground">{predictionData.avg_rainfall}mm rainfall, {predictionData.avg_temperature}°C temp</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">
-                  {predictionData.irrigationType} irrigation provides optimal water distribution.
+                  Current environmental conditions are within the model's training range for {predictionData.District}.
                 </p>
               </div>
             </div>
@@ -267,7 +373,7 @@ export function YieldResults() {
               <div>
                 <h4>Optimize Fertilizer Application</h4>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Use soil testing to determine exact nutrient requirements. Apply fertilizers 
+                  Use soil testing to determine exact nutrient requirements. Apply fertilizers
                   in split doses for better absorption and reduced wastage.
                 </p>
               </div>
@@ -279,7 +385,7 @@ export function YieldResults() {
               <div>
                 <h4>Implement Precision Irrigation</h4>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Monitor soil moisture levels regularly. Adjust irrigation schedule based on 
+                  Monitor soil moisture levels regularly. Adjust irrigation schedule based on
                   crop growth stage and weather conditions for optimal water use.
                 </p>
               </div>
@@ -291,7 +397,7 @@ export function YieldResults() {
               <div>
                 <h4>Pest and Disease Management</h4>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Conduct weekly field inspections. Use integrated pest management strategies 
+                  Conduct weekly field inspections. Use integrated pest management strategies
                   and apply pesticides only when threshold levels are reached.
                 </p>
               </div>
@@ -303,7 +409,7 @@ export function YieldResults() {
               <div>
                 <h4>Soil Health Improvement</h4>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Add organic matter through compost or green manure. Practice crop rotation 
+                  Add organic matter through compost or green manure. Practice crop rotation
                   to maintain soil fertility and reduce pest build-up.
                 </p>
               </div>

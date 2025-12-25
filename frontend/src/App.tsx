@@ -17,7 +17,7 @@ import { YieldPrediction } from './pages/yield/YieldPrediction';
 import { YieldResults } from './pages/yield/YieldResults';
 import { CropAdvisory } from './pages/advisory/CropAdvisory';
 import { PestDetection } from './pages/pest/PestDetection';
-import { CropPricePrediction } from './pages/crop/CropPricePrediction';
+import { CropRecommendation } from './pages/crop/CropRecommendation';
 import { MarketPrices } from './pages/market/MarketPrices';
 import { WeatherAlerts } from './pages/weather/WeatherAlerts';
 import { Profile } from './pages/profile/Profile';
@@ -133,11 +133,11 @@ function AppRoutes() {
         }
       />
       <Route
-        path="/crop/price"
+        path="/crop/recommendation"
         element={
           <ProtectedRoute>
             <AppLayout>
-              <CropPricePrediction />
+              <CropRecommendation />
             </AppLayout>
           </ProtectedRoute>
         }
