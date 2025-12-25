@@ -7,6 +7,7 @@ import { Label } from '../../components/ui/Label';
 import { Select } from '../../components/ui/Select';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../../components/ui/Card';
 import { Sprout, User, Mail, Phone, MapPin, Ruler, Lock, AlertCircle } from 'lucide-react';
+import { GoogleAuthButton } from '../../components/auth/GoogleAuthButton';
 
 export function Signup() {
   const [formData, setFormData] = useState({
@@ -215,6 +216,17 @@ export function Signup() {
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? 'Creating Account...' : 'Create Account'}
               </Button>
+
+              <div className="relative my-4">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-background px-2 text-muted-foreground">Or continue with</span>
+                </div>
+              </div>
+
+              <GoogleAuthButton text="signup_with" />
 
               <div className="text-center">
                 <p className="text-sm text-muted-foreground">

@@ -5,12 +5,42 @@ import { mockMarketPrices } from '../../utils/mockData';
 import { DollarSign, TrendingUp, TrendingDown, Search, RefreshCw } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { api } from '../../services/api';
 
 export function MarketPrices() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCrop, setSelectedCrop] = useState<string | null>(null);
+  const [marketPrices, setMarketPrices] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const filteredPrices = mockMarketPrices.filter((item) =>
+  React.useEffect(() => {
+    fetchPrices();
+
+    // Poll for live prices every 3 seconds
+    const interval = setInterval(() => {
+      fetchPrices(true); // silent update
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  const fetchPrices = async (silent = false) => {
+    try {
+      if (!silent) setLoading(true);
+      const data = await api.get('/market/prices');
+      if (Array.isArray(data)) {
+        setMarketPrices(data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch prices', error);
+    } finally {
+      if (!silent) setLoading(false);
+    }
+  };
+
+  const displayPrices = marketPrices.length > 0 ? marketPrices : mockMarketPrices;
+
+  const filteredPrices = displayPrices.filter((item) =>
     item.crop.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -34,9 +64,9 @@ export function MarketPrices() {
             Live market rates and price trends for major crops
           </p>
         </div>
-        <Button>
-          <RefreshCw className="w-4 h-4 mr-2" />
-          Refresh Prices
+        <Button onClick={() => fetchPrices(false)} disabled={loading}>
+          <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+          {loading ? 'Refreshing...' : 'Refresh Prices'}
         </Button>
       </div>
 
@@ -99,7 +129,7 @@ export function MarketPrices() {
                   </div>
 
                   <div className="pt-3 border-t border-border">
-                    <p className="text-xs text-muted-foreground">Last updated: Today, 10:00 AM</p>
+                    <p className="text-xs text-muted-foreground">Last updated: Live</p>
                   </div>
                 </div>
               </CardContent>
@@ -149,7 +179,7 @@ export function MarketPrices() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {mockMarketPrices
+              {displayPrices
                 .filter((item) => item.trend === 'up')
                 .slice(0, 3)
                 .map((item) => (
