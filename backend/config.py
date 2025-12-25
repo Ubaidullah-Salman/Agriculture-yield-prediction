@@ -30,3 +30,6 @@ class Config:
 # Create necessary directories
 os.makedirs(Config.UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(Config.MODEL_PATH, exist_ok=True)
+
+
+

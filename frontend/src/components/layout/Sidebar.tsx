@@ -29,22 +29,22 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const location = useLocation();
   const { user, logout } = useAuth();
 
-  const menuItems = user?.role === 'admin' 
+  const menuItems = user?.role === 'admin'
     ? [
-        { icon: LayoutDashboard, label: 'Admin Dashboard', path: '/admin/dashboard' },
-        { icon: Users, label: 'User Management', path: '/admin/users' },
-      ]
+      { icon: LayoutDashboard, label: 'Admin Dashboard', path: '/admin/dashboard' },
+      { icon: Users, label: 'User Management', path: '/admin/users' },
+    ]
     : [
-        { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
-        { icon: Sprout, label: 'Farm Management', path: '/farm' },
-        { icon: TrendingUp, label: 'Yield Prediction', path: '/yield' },
-        { icon: MessageSquare, label: 'Crop Advisory', path: '/advisory' },
-        { icon: Bug, label: 'Pest Detection', path: '/pest' },
-        { icon: Sparkles, label: 'Crop Price Prediction', path: '/crop/price' },
-        { icon: Store, label: 'Market Prices', path: '/market' },
-        { icon: CloudRain, label: 'Weather Alerts', path: '/weather' },
-        { icon: User, label: 'Profile', path: '/profile' },
-      ];
+      { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
+      { icon: Sprout, label: 'Farm Management', path: '/farm' },
+      { icon: TrendingUp, label: 'Yield Prediction', path: '/yield' },
+      { icon: MessageSquare, label: 'Crop Advisory', path: '/advisory' },
+      { icon: Bug, label: 'Pest Detection', path: '/pest' },
+      { icon: Sparkles, label: 'Crop Recommendation', path: '/crop/recommendation' },
+      { icon: Store, label: 'Market Prices', path: '/market' },
+      { icon: CloudRain, label: 'Weather Alerts', path: '/weather' },
+      { icon: User, label: 'Profile', path: '/profile' },
+    ];
 
   const handleNavigation = (path: string) => {
     navigate(path);
@@ -69,9 +69,8 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
 
       {/* Sidebar */}
       <aside
-        className={`fixed left-0 top-0 h-full w-64 bg-card border-r border-border z-50 transform transition-transform duration-300 ease-in-out ${
-          isOpen ? 'translate-x-0' : '-translate-x-full'
-        } lg:translate-x-0 lg:static lg:z-0`}
+        className={`fixed left-0 top-0 h-full w-64 bg-card border-r border-border z-50 transform transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : '-translate-x-full'
+          } lg:translate-x-0 lg:static lg:z-0`}
       >
         <div className="flex flex-col h-full">
           {/* Header */}
@@ -98,14 +97,13 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                   <li key={item.path}>
                     <button
                       onClick={() => handleNavigation(item.path)}
-                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-md transition-all ${
-                        isActive
-                          ? 'bg-primary text-primary-foreground'
-                          : 'hover:bg-accent text-foreground'
-                      }`}
+                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-md transition-all ${isActive
+                        ? 'bg-primary text-primary-foreground'
+                        : 'hover:bg-accent text-foreground'
+                        }`}
                     >
                       <Icon className="w-5 h-5" />
-                      <span>{item.label}</span>
+                      <span className="whitespace-nowrap">{item.label}</span>
                     </button>
                   </li>
                 );

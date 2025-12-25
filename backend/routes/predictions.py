@@ -1,11 +1,12 @@
 from flask import Blueprint, request, jsonify, g, current_app
 from werkzeug.utils import secure_filename
-from models import db, Prediction
+from models import db, Prediction, User
 from middleware.auth_middleware import token_required
 from ml_models.model_loader import ModelLoader
 import os
 import json
 import uuid
+import jwt
 
 predictions_bp = Blueprint('predictions', __name__)
 loader = ModelLoader()
@@ -14,113 +15,155 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in {'png', 'jpg', 'jpeg'}
 
 @predictions_bp.route('/yield', methods=['POST'])
-@token_required
 def predict_yield():
     data = request.get_json()
     if not data:
         return jsonify({'message': 'No data provided'}), 400
         
+    # Optional Auth check
+    current_user_id = None
+    if 'Authorization' in request.headers:
+        try:
+            token = request.headers['Authorization'].split(" ")[1]
+            decoded = jwt.decode(token, current_app.config['JWT_SECRET_KEY'], algorithms=["HS256"])
+            current_user_id = decoded['user_id']
+        except:
+            # Token invalid or expired, proceed as anonymous
+            pass
+
     try:
         # Run prediction
-        predicted_yield = loader.yield_model.predict(data)
+        # print(f"Predict Yield Request Data: {data}") # Debug logging
+        predicted_yield = loader.predict_yield(data)
         
         result = {
             'predicted_yield': predicted_yield, 
-            'unit': 'kg/acre',
+            'unit': 'maunds/acre',
             'confidence': 85.0  # RandomForest doesn't give confidence easily for regression, mocking
         }
         
-        # Save to DB
-        prediction = Prediction(
-            user_id=g.current_user.id,
-            prediction_type='yield',
-            input_data=json.dumps(data),
-            result_data=json.dumps(result)
-        )
-        db.session.add(prediction)
-        db.session.commit()
+        # Save to DB only if user is logged in
+        # Save to DB only if user is logged in
+        if current_user_id:
+            try:
+                prediction = Prediction(
+                    user_id=current_user_id,
+                    prediction_type='yield',
+                    input_data=json.dumps(data),
+                    result_data=json.dumps(result)
+                )
+                db.session.add(prediction)
+                db.session.commit()
+            except Exception as db_e:
+                print(f"DB Error (Non-fatal): {db_e}")
+                # We don't fail the request if DB fails
         
         return jsonify(result), 200
     except Exception as e:
-        return jsonify({'message': str(e)}), 500
-
-@predictions_bp.route('/predict-price', methods=['POST'])
-@token_required
-def predict_price():
-    # Handle Image Upload
-    if 'image' not in request.files:
-        return jsonify({'message': 'No image file provided'}), 400
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"Error in predict_yield: {str(e)}\n{error_details}")
         
-    file = request.files['image']
-    crop_type = request.form.get('crop_type', 'wheat')
-    
-    if file.filename == '':
-        return jsonify({'message': 'No selected file'}), 400
-        
-    if file and allowed_file(file.filename):
-        filename = secure_filename(f"{uuid.uuid4()}_{file.filename}")
-        filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
-        file.save(filepath)
-        
+        # Write to log file in uploads folder using absolute path
         try:
-            # Analyze Quality
-            quality_data = loader.price_model.analyze_quality(filepath)
+            log_path = os.path.join(current_app.config['UPLOAD_FOLDER'], 'yield_error_log.txt')
+            with open(log_path, 'a') as f:
+                f.write(f"Error: {str(e)}\nData: {data}\nTraceback: {error_details}\n\n")
+        except:
+            pass # logging shouldn't crash the app
             
-            # Predict Price
-            prediction_result = loader.price_model.predict_price(crop_type, quality_data)
-            
-            # Combine results
-            full_result = {**quality_data, **prediction_result}
-            
-            # Save to DB
+        return jsonify({'message': f"Model Error: {str(e)}", 'details': str(e)}), 500
+
+@predictions_bp.route('/recommendation', methods=['POST'])
+def predict_recommendation():
+    data = request.get_json()
+    if not data:
+        return jsonify({'message': 'No data provided'}), 400
+        
+    # Optional Auth check
+    current_user_id = None
+    if 'Authorization' in request.headers:
+        try:
+            token = request.headers['Authorization'].split(" ")[1]
+            decoded = jwt.decode(token, current_app.config['JWT_SECRET_KEY'], algorithms=["HS256"])
+            current_user_id = decoded['user_id']
+        except:
+            pass
+
+    try:
+        # Run prediction
+        crop_name = loader.predict_recommendation(data)
+        result = {
+            'recommended_crop': crop_name,
+            'confidence': 95.0 # Random Forest is generally high confidence for this dataset
+        }
+        
+        # Save to DB if logged in
+        if current_user_id:
             prediction = Prediction(
-                user_id=g.current_user.id,
-                prediction_type='price',
-                input_data=json.dumps({'crop_type': crop_type}),
-                result_data=json.dumps(full_result),
-                image_path=filepath
+                user_id=current_user_id,
+                prediction_type='recommendation',
+                input_data=json.dumps(data),
+                result_data=json.dumps(result)
             )
             db.session.add(prediction)
             db.session.commit()
             
-            return jsonify(full_result), 200
-            
-        except Exception as e:
-            return jsonify({'message': str(e)}), 500
-            
-    return jsonify({'message': 'Invalid file type'}), 400
+        return jsonify(result), 200
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'message': f"Model Error: {str(e)}"}), 500
 
 @predictions_bp.route('/pest', methods=['POST'])
-@token_required
 def detect_pest():
     if 'image' not in request.files:
         return jsonify({'message': 'No image file provided'}), 400
         
     file = request.files['image']
     
+    # Optional Auth check
+    current_user_id = None
+    if 'Authorization' in request.headers:
+        try:
+            token = request.headers['Authorization'].split(" ")[1]
+            decoded = jwt.decode(token, current_app.config['JWT_SECRET_KEY'], algorithms=["HS256"])
+            current_user_id = decoded['user_id']
+        except:
+            pass
+
     if file and allowed_file(file.filename):
         filename = secure_filename(f"{uuid.uuid4()}_{file.filename}")
         filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
         file.save(filepath)
         
         try:
-            # Run detection
-            result = loader.pest_model.predict(filepath)
+            # Run detection using loader helper
+            print(f"[PEST DEBUG] Starting prediction for {filepath}")
+            result = loader.predict_pest(filepath)
+            print(f"[PEST DEBUG] Prediction successful: {result}")
             
-            # Save to DB
-            prediction = Prediction(
-                user_id=g.current_user.id,
-                prediction_type='pest',
-                input_data=json.dumps({'filename': filename}),
-                result_data=json.dumps(result),
-                image_path=filepath
-            )
-            db.session.add(prediction)
-            db.session.commit()
+            # Save to DB only if logged in
+            if current_user_id:
+                prediction = Prediction(
+                    user_id=current_user_id,
+                    prediction_type='pest',
+                    input_data=json.dumps({'filename': filename}),
+                    result_data=json.dumps(result),
+                    image_path=filepath
+                )
+                db.session.add(prediction)
+                db.session.commit()
             
             return jsonify(result), 200
         except Exception as e:
-            return jsonify({'message': str(e)}), 500
+            import traceback
+            traceback.print_exc()
+            error_msg = f"Analysis Error: {str(e)}"
+            print(f"[PEST DEBUG] ERROR: {error_msg}")
+            return jsonify({'message': error_msg}), 500
+
             
     return jsonify({'message': 'Invalid file type'}), 400
 

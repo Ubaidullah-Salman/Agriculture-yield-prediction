@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, send_from_directory
+from flask import Flask, jsonify, send_from_directory, request
 from flask_cors import CORS
 from config import Config
 from models import db, init_db
@@ -35,7 +35,43 @@ app.register_blueprint(predictions_bp, url_prefix='/api/crop', name='crop_bp')  
 app.register_blueprint(weather_bp, url_prefix='/api/weather')
 app.register_blueprint(admin_bp, url_prefix='/api/admin')
 app.register_blueprint(market_bp, url_prefix='/api/market')
+# app.register_blueprint(market_bp, url_prefix='/api/market') # Removed duplicate
 app.register_blueprint(advisory_bp, url_prefix='/api/advisory')
+
+# --- DEBUGGING LOGGING ---
+import logging
+import traceback
+
+# Setup basic file logging
+logging.basicConfig(filename='app_debug.log', level=logging.DEBUG, 
+                    format='%(asctime)s %(levelname)s: %(message)s')
+
+@app.before_request
+def log_request_info():
+    logging.info(f"Requests: {request.method} {request.url}")
+    # Be careful logging body if large, but for now we need it
+    try:
+        if request.is_json:
+            logging.info(f"Body: {request.get_json()}")
+        elif request.files:
+            logging.info(f"Files: {request.files}")
+    except:
+        pass
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    # Pass through HTTP errors
+    if isinstance(e,  (int, str)): 
+         return jsonify({"error": str(e)}), 500
+         
+    logging.error(f"Unhandled Exception: {str(e)}")
+    logging.error(traceback.format_exc())
+    return jsonify({
+        "message": "Internal Server Error",
+        "error": str(e),
+        "trace": traceback.format_exc()
+    }), 500
+# -------------------------
 
 
 @app.route('/health')
@@ -54,6 +90,23 @@ def initialize_database():
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+@app.route('/')
+def home():
+    return jsonify({
+        "message": "Agriculture Yield Prediction API is running.",
+        "endpoints": [
+            "/api/auth",
+            "/api/users",
+            "/api/farms",
+            "/api/predict",
+            "/api/weather",
+            "/api/admin",
+            "/api/market",
+            "/api/advisory"
+        ]
+    })
+
+
 
 if __name__ == '__main__':
     # Auto-create tables if they don't exist (for dev convenience)

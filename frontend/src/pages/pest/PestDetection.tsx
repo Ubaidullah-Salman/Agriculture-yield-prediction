@@ -5,44 +5,68 @@ import { Bug, Upload, Camera, AlertCircle, CheckCircle, XCircle } from 'lucide-r
 
 export function PestDetection() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [result, setResult] = useState<any>(null);
+  const [error, setError] = useState<string>('');
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
+      setSelectedFile(file);
       const reader = new FileReader();
       reader.onload = (e) => {
         setSelectedImage(e.target?.result as string);
         setResult(null);
+        setError('');
       };
       reader.readAsDataURL(file);
     }
   };
 
-  const handleAnalyze = () => {
+  const handleAnalyze = async () => {
+    if (!selectedFile) return;
+
     setAnalyzing(true);
-    // Simulate AI analysis
-    setTimeout(() => {
-      setResult({
-        detected: true,
-        pestName: 'Aphids',
-        severity: 'Medium',
-        confidence: 87,
-        recommendations: [
-          'Apply neem oil spray (5ml per liter of water)',
-          'Introduce natural predators like ladybugs',
-          'Remove heavily infested plant parts',
-          'Monitor regularly for 2 weeks',
-        ],
-        preventiveMeasures: [
-          'Maintain proper plant spacing for air circulation',
-          'Use yellow sticky traps for early detection',
-          'Apply organic mulch to reduce pest habitat',
-        ],
+    setError('');
+
+    try {
+      const formData = new FormData();
+      formData.append('image', selectedFile);
+
+      const token = localStorage.getItem('token');
+      const headers: any = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const response = await fetch('/api/detect/pest', {
+        method: 'POST',
+        headers: headers,
+        body: formData,
       });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Analysis failed');
+      }
+
+      const data = await response.json();
+      setResult({
+        detected: data.detected,
+        pestName: data.pest_name,
+        severity: data.severity,
+        confidence: Math.round(data.confidence),
+        recommendations: data.recommendations,
+        preventiveMeasures: data.preventiveMeasures || []
+      });
+
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || 'Failed to analyze image. Please try again.');
+    } finally {
       setAnalyzing(false);
-    }, 2000);
+    }
   };
 
   const getSeverityColor = (severity: string) => {
@@ -123,12 +147,14 @@ export function PestDetection() {
                     variant="outline"
                     onClick={() => {
                       setSelectedImage(null);
+                      setSelectedFile(null);
                       setResult(null);
                     }}
                   >
                     Upload New
                   </Button>
                 </div>
+                {error && <p className="text-red-500 text-sm text-center">{error}</p>}
               </div>
             )}
           </div>
@@ -203,25 +229,27 @@ export function PestDetection() {
             </CardContent>
           </Card>
 
-          {/* Preventive Measures */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <XCircle className="w-5 h-5 text-primary" />
-                Preventive Measures
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ul className="space-y-2">
-                {result.preventiveMeasures.map((measure: string, index: number) => (
-                  <li key={index} className="flex items-start gap-2">
-                    <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
-                    <span className="text-sm">{measure}</span>
-                  </li>
-                ))}
-              </ul>
-            </CardContent>
-          </Card>
+          {/* Preventive Measures - Only show if data exists */}
+          {result.preventiveMeasures && result.preventiveMeasures.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <XCircle className="w-5 h-5 text-primary" />
+                  Preventive Measures
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ul className="space-y-2">
+                  {result.preventiveMeasures.map((measure: string, index: number) => (
+                    <li key={index} className="flex items-start gap-2">
+                      <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                      <span className="text-sm">{measure}</span>
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          )}
         </div>
       )}
 

@@ -12,6 +12,7 @@ import {
   AlertTriangle,
   ArrowRight,
   Leaf,
+  Sprout,
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
@@ -21,9 +22,9 @@ export function Dashboard() {
 
   const quickActions = [
     { label: 'Predict Yield', path: '/yield', icon: TrendingUp },
-    { label: 'Check Weather', path: '/weather', icon: CloudRain },
-    { label: 'Market Prices', path: '/market', icon: DollarSign },
+    { label: 'Crop Recommendation', path: '/crop/recommendation', icon: Sprout },
     { label: 'Pest Detection', path: '/pest', icon: Activity },
+    { label: 'Check Weather', path: '/weather', icon: CloudRain },
   ];
 
   const getAlertIcon = (type: string) => {
