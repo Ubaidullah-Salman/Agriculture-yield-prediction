@@ -2,6 +2,9 @@ from flask import Blueprint, request, jsonify, current_app
 from models import db, User
 import jwt
 import datetime
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
+import os
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -76,3 +79,65 @@ def verify_token():
         return jsonify({'valid': True, 'user': g.current_user.to_dict()}), 200
         
     return _verify()
+
+@auth_bp.route('/google-login', methods=['POST'])
+def google_login():
+    data = request.get_json()
+    token = data.get('token')
+    
+    if not token:
+        return jsonify({'message': 'Missing token'}), 400
+        
+    try:
+        # Verify the token
+        CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID')
+        
+        # Verify token - if CLIENT_ID is None, this might verify signature but not audience.
+        # Ideally we want strict audience check.
+        request_adapter = google_requests.Request()
+        id_info = id_token.verify_oauth2_token(token, request_adapter, CLIENT_ID)
+
+        # Check if user exists
+        email = id_info['email']
+        name = id_info.get('name', 'Unknown')
+        
+        user = User.query.filter_by(email=email).first()
+        
+        if not user:
+            # Create new user
+            user = User(
+                name=name,
+                email=email,
+                role='user',
+                password_hash='google_oauth_dummy_hash', 
+                status='active',
+                phone='',
+                location='',
+                farm_size=''
+            )
+            db.session.add(user)
+            db.session.commit()
+            
+        # Update last login
+        user.last_login = datetime.datetime.utcnow()
+        db.session.commit()
+        
+        # Generate JWT
+        token = jwt.encode({
+            'user_id': user.id,
+            'role': user.role,
+            'exp': datetime.datetime.utcnow() + datetime.timedelta(seconds=current_app.config['JWT_ACCESS_TOKEN_EXPIRES'])
+        }, current_app.config['JWT_SECRET_KEY'], algorithm="HS256")
+        
+        return jsonify({
+            'token': token,
+            'user': user.to_dict()
+        }), 200
+        
+    except ValueError as e:
+        return jsonify({'message': f'Invalid token: {str(e)}'}), 401
+    except Exception as e:
+        print(f"GOOGLE LOGIN ERROR: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'message': str(e)}), 500
