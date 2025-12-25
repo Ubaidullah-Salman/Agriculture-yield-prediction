@@ -16,3 +16,5 @@ werkzeug
 user-agents
 geoip2
 psutil
+google-auth
+requests
