@@ -22,10 +22,6 @@ def forecast():
 @weather_bp.route('/alerts', methods=['GET'])
 @token_required
 def alerts():
-    # Mock alerts
-    return jsonify([
-        {
-            'id': '1', 'type': 'weather', 'severity': 'high',
-            'title': 'Heavy Rain', 'message': 'Heavy rain expected tomorrow.'
-        }
-    ]), 200
+    location = request.args.get('location', 'Islamabad')
+    data = service.get_advisories(location)
+    return jsonify(data), 200
