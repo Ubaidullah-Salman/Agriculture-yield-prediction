@@ -1,11 +1,24 @@
 import requests
 from config import Config
 import random
+import time
+from utils.dsa import merge_sort
 
 class WeatherService:
     BASE_URL = "http://api.openweathermap.org/data/2.5"
     
+    # DSA ROADMAP: Memoization (DP) store for weather data by location
+    _memo = {}
+    
     def get_current_weather(self, location):
+        # DSA ROADMAP: Use manual Memoization (DP)
+        if location in self._memo:
+            # Check if cache is fresh (e.g., 10 mins)
+            data, timestamp = self._memo[location]
+            if time.time() - timestamp < 600:
+                print(f"[DSA CACHE] Hit for {location}")
+                return data
+
         api_key = Config.OPENWEATHER_API_KEY
         
         if not api_key:
@@ -16,10 +29,10 @@ class WeatherService:
                 'q': location,
                 'appid': api_key,
                 'units': 'metric'
-            })
+            }, timeout=5)
             if response.status_code == 200:
                 data = response.json()
-                return {
+                weather_data = {
                     'temp': round(data['main']['temp'], 1),
                     'condition': data['weather'][0]['main'],
                     'humidity': data['main']['humidity'],
@@ -27,6 +40,9 @@ class WeatherService:
                     'rain': data.get('rain', {}).get('1h', 0),
                     'location': data['name']
                 }
+                # Store in memoization table
+                self._memo[location] = (weather_data, time.time())
+                return weather_data
             return self._mock_current_weather(location)
         except:
             return self._mock_current_weather(location)
@@ -44,7 +60,7 @@ class WeatherService:
                 'appid': api_key,
                 'units': 'metric'
             }
-            response = requests.get(url, params=params)
+            response = requests.get(url, params=params, timeout=5)
             
             if response.status_code == 200:
                 data = response.json()
@@ -113,7 +129,7 @@ class WeatherService:
                 'id': 'heat-1', 'type': 'temperature', 'severity': 'medium',
                 'title': 'High Temperature Alert',
                 'message': f'Temperature is {temp}°C. Ensure crops are well-hydrated.',
-                'time': 'Current'
+                'timestamp': 'Current'
             })
             irrigation = {
                 'status': 'Irrigation Recommended',
@@ -125,7 +141,7 @@ class WeatherService:
                 'id': 'cold-1', 'type': 'temperature', 'severity': 'high',
                 'title': 'Frost Warning',
                 'message': f'Freezing temperatures ({temp}°C) expected. Protect sensitive crops.',
-                'time': 'Current'
+                'timestamp': 'Current'
             })
 
         # 4. Analyze Rain/Conditions
@@ -135,7 +151,7 @@ class WeatherService:
                 'id': 'rain-1', 'type': 'weather', 'severity': 'high',
                 'title': 'Rainfall Alert',
                 'message': f'Condition is {weather.get("condition")}. detailed: Heavy rainfall expected.',
-                'time': 'Current' 
+                'timestamp': 'Current' 
             })
             irrigation = {
                 'status': 'Skip Irrigation',
@@ -162,7 +178,7 @@ class WeatherService:
                 'id': 'wind-1', 'type': 'wind', 'severity': 'medium',
                 'title': 'High Wind Alert',
                 'message': f'Wind speeds at {wind} km/h. Avoid spraying.',
-                'time': 'Current'
+                'timestamp': 'Current'
             })
              if 'Pest Control Spraying' not in activities['restricted']: # don't add duplicate
                  activities['restricted'].append('Pest Control Spraying (Drift risk)')
@@ -171,8 +187,13 @@ class WeatherService:
                  activities['recommended'].append('Fertilizer Application')
                  activities['recommended'].append('Pest Control Spraying')
 
+        # 6. DSA Integration: MergeSort alerts by severity
+        # Map severity to numeric for sorting: high (2), medium (1), temperature/wind (0)
+        severity_map = {'high': 2, 'medium': 1}
+        sorted_alerts = merge_sort(alerts, key=lambda x: severity_map.get(x.get('severity'), 0), reverse=True)
+
         return {
-            'alerts': alerts,
+            'alerts': sorted_alerts,
             'irrigation': irrigation,
             'activities': activities
         }

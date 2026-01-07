@@ -12,27 +12,30 @@ import { AdminLogin } from './pages/auth/AdminLogin';
 
 // User Dashboard & Pages
 import { Dashboard } from './pages/dashboard/Dashboard';
-import { FarmManagement } from './pages/farm/FarmManagement';
+import { FarmManagement } from './pages/FarmManagement';
 import { YieldPrediction } from './pages/yield/YieldPrediction';
 import { YieldResults } from './pages/yield/YieldResults';
-import { CropAdvisory } from './pages/advisory/CropAdvisory';
-import { PestDetection } from './pages/pest/PestDetection';
-import { CropRecommendation } from './pages/crop/CropRecommendation';
-import { MarketPrices } from './pages/market/MarketPrices';
-import { WeatherAlerts } from './pages/weather/WeatherAlerts';
-import { Profile } from './pages/profile/Profile';
+import { CropAdvisory } from './pages/CropAdvisory';
+import { PestDetection } from './pages/PestDetection';
+import { CropRecommendation } from './pages/CropRecommendation';
+import { MarketPrices } from './pages/MarketPrices';
+import { WeatherAlerts } from './pages/WeatherAlerts';
+import { Profile } from './pages/Profile';
 
 // Admin Pages
 import { AdminDashboard } from './pages/dashboard/AdminDashboard';
 import { UserManagement } from './pages/admin/UserManagement';
+import { SystemLogs } from './pages/admin/SystemLogs';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
+  if (isLoading) return <div className="flex h-screen items-center justify-center">Loading...</div>;
   return isAuthenticated ? <>{children}</> : <Navigate to="/login" />;
 }
 
 function AdminRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, isLoading } = useAuth();
+  if (isLoading) return <div className="flex h-screen items-center justify-center">Loading...</div>;
   return isAuthenticated && user?.role === 'admin' ? <>{children}</> : <Navigate to="/login" />;
 }
 
@@ -53,22 +56,38 @@ function AppLayout({ children }: { children: React.ReactNode }) {
 }
 
 function AppRoutes() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return <div className="flex h-screen items-center justify-center">Loading...</div>;
+  }
 
   return (
     <Routes>
       {/* Public Routes */}
       <Route
         path="/login"
-        element={isAuthenticated ? <Navigate to="/dashboard" /> : <Login />}
+        element={
+          isAuthenticated
+            ? <Navigate to={user?.role === 'admin' ? "/admin/dashboard" : "/dashboard"} replace />
+            : <Login />
+        }
       />
       <Route
         path="/signup"
-        element={isAuthenticated ? <Navigate to="/dashboard" /> : <Signup />}
+        element={
+          isAuthenticated
+            ? <Navigate to={user?.role === 'admin' ? "/admin/dashboard" : "/dashboard"} replace />
+            : <Signup />
+        }
       />
       <Route
         path="/admin/login"
-        element={isAuthenticated ? <Navigate to="/admin/dashboard" /> : <AdminLogin />}
+        element={
+          isAuthenticated
+            ? <Navigate to={user?.role === 'admin' ? "/admin/dashboard" : "/dashboard"} replace />
+            : <AdminLogin />
+        }
       />
 
       {/* Protected User Routes */}
@@ -190,6 +209,16 @@ function AppRoutes() {
           <AdminRoute>
             <AppLayout>
               <UserManagement />
+            </AppLayout>
+          </AdminRoute>
+        }
+      />
+      <Route
+        path="/admin/logs"
+        element={
+          <AdminRoute>
+            <AppLayout>
+              <SystemLogs />
             </AppLayout>
           </AdminRoute>
         }

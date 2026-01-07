@@ -12,6 +12,8 @@ from routes.predictions import predictions_bp
 from routes.weather import weather_bp
 from routes.admin import admin_bp
 from routes.market import market_bp, advisory_bp
+from routes.dashboard import dashboard_bp
+from routes.notifications import notifications_bp
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -26,6 +28,8 @@ db.init_app(app)
 app.register_blueprint(auth_bp, url_prefix='/api/auth')
 app.register_blueprint(users_bp, url_prefix='/api/users')
 app.register_blueprint(farm_bp, url_prefix='/api/farms')
+app.register_blueprint(dashboard_bp, url_prefix='/api/dashboard')
+app.register_blueprint(notifications_bp, url_prefix='/api/notifications')
 
 # Predictions Blueprint with aliases to match Frontend
 app.register_blueprint(predictions_bp, url_prefix='/api/predict') # serve /yield
@@ -41,9 +45,11 @@ app.register_blueprint(advisory_bp, url_prefix='/api/advisory')
 # --- DEBUGGING LOGGING ---
 import logging
 import traceback
+from werkzeug.exceptions import HTTPException
 
 # Setup basic file logging
-logging.basicConfig(filename='app_debug.log', level=logging.DEBUG, 
+basedir = os.path.abspath(os.path.dirname(__file__))
+logging.basicConfig(filename=os.path.join(basedir, 'app_debug.log'), level=logging.DEBUG, 
                     format='%(asctime)s %(levelname)s: %(message)s')
 
 @app.before_request
@@ -61,9 +67,9 @@ def log_request_info():
 @app.errorhandler(Exception)
 def handle_exception(e):
     # Pass through HTTP errors
-    if isinstance(e,  (int, str)): 
-         return jsonify({"error": str(e)}), 500
-         
+    if isinstance(e, HTTPException):
+        return jsonify({"error": str(e)}), e.code
+        
     logging.error(f"Unhandled Exception: {str(e)}")
     logging.error(traceback.format_exc())
     return jsonify({
@@ -74,7 +80,7 @@ def handle_exception(e):
 # -------------------------
 
 
-@app.route('/health')
+@app.route('/api/health')
 def health_check():
     return jsonify({'status': 'healthy'}), 200
 

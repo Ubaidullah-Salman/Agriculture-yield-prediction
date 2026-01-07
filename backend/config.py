@@ -9,8 +9,8 @@ class Config:
     DEBUG = os.getenv('FLASK_DEBUG', 'True') == 'True'
     
     # Database settings
-    # Defaulting to standard local MySQL setup. User might need to change this.
-    SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL', 'mysql+mysqlconnector://root:password@localhost/agri_project_db')
+    # Using the exact connection URL found in your .env
+    SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL', 'mysql+mysqlconnector://agri_user:22998833@localhost/agri_db')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
     # JWT settings

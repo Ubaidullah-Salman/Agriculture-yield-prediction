@@ -21,7 +21,7 @@ export function AdminLogin() {
     setLoading(true);
 
     try {
-      const success = await login(email, password, 'admin');
+      const success = await login(email, password);
       if (success) {
         navigate('/admin/dashboard');
       } else {

@@ -6,6 +6,7 @@ import { Input } from '../../components/ui/Input';
 import { Label } from '../../components/ui/Label';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../../components/ui/Card';
 import { Sprout, Mail, Lock, AlertCircle } from 'lucide-react';
+import { GoogleAuthButton } from '../../components/auth/GoogleAuthButton';
 
 export function Login() {
   const [email, setEmail] = useState('');
@@ -15,13 +16,22 @@ export function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
 
+  const handleGoogleSuccess = React.useCallback((credential: string) => {
+    console.log('Google Sign in success:', credential);
+    navigate('/dashboard');
+  }, [navigate]);
+
+  const handleGoogleError = React.useCallback(() => {
+    console.error('Google Sign in failed');
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
 
     try {
-      const success = await login(email, password, 'user');
+      const success = await login(email, password);
       if (success) {
         navigate('/dashboard');
       } else {
@@ -43,7 +53,7 @@ export function Login() {
             <Sprout className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-3xl font-bold mb-2">Welcome Back</h1>
-          <p className="text-muted-foreground">Sign in to your AgriTech account</p>
+          <p className="text-muted-foreground">Sign in to your AgriPredict account</p>
         </div>
 
         {/* Login Card */}
@@ -96,6 +106,24 @@ export function Login() {
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? 'Signing in...' : 'Sign In'}
               </Button>
+
+              <div className="relative my-4">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-background px-2 text-muted-foreground">
+                    Or continue with
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex justify-center w-full">
+                <GoogleAuthButton
+                  onSuccess={handleGoogleSuccess}
+                  onError={handleGoogleError}
+                />
+              </div>
 
               <div className="text-center space-y-2">
                 <p className="text-sm text-muted-foreground">

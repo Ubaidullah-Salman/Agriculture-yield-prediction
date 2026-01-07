@@ -17,6 +17,9 @@ import {
   X,
   Sparkles,
   Store,
+  Activity,
+  Shield,
+  Globe,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -33,6 +36,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
     ? [
       { icon: LayoutDashboard, label: 'Admin Dashboard', path: '/admin/dashboard' },
       { icon: Users, label: 'User Management', path: '/admin/users' },
+      { icon: Activity, label: 'System Logs', path: '/admin/logs' },
     ]
     : [
       { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
@@ -77,7 +81,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           <div className="flex items-center justify-between p-4 border-b border-border">
             <div className="flex items-center gap-2">
               <Sprout className="w-8 h-8 text-primary" />
-              <span className="font-semibold">AgriTech</span>
+              <span className="font-semibold">AgriPredict</span>
             </div>
             <button
               onClick={onClose}

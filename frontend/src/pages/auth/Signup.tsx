@@ -7,6 +7,7 @@ import { Label } from '../../components/ui/Label';
 import { Select } from '../../components/ui/Select';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../../components/ui/Card';
 import { Sprout, User, Mail, Phone, MapPin, Ruler, Lock, AlertCircle } from 'lucide-react';
+import { GoogleAuthButton } from '../../components/auth/GoogleAuthButton';
 
 export function Signup() {
   const [formData, setFormData] = useState({
@@ -14,6 +15,7 @@ export function Signup() {
     email: '',
     phone: '',
     location: '',
+    city: '',
     farmSize: '',
     password: '',
     confirmPassword: '',
@@ -22,6 +24,15 @@ export function Signup() {
   const [loading, setLoading] = useState(false);
   const { signup } = useAuth();
   const navigate = useNavigate();
+
+  const handleGoogleSuccess = React.useCallback((credential: string) => {
+    console.log('Google Sign in success:', credential);
+    navigate('/dashboard');
+  }, [navigate]);
+
+  const handleGoogleError = React.useCallback(() => {
+    console.error('Google Sign in failed');
+  }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({
@@ -47,11 +58,11 @@ export function Signup() {
     setLoading(true);
 
     try {
-      const success = await signup(formData);
-      if (success) {
-        navigate('/dashboard');
+      const result = await signup(formData);
+      if (result.success) {
+        navigate('/dashboard'); // Auto-login redirect
       } else {
-        setError('Signup failed. Please try again.');
+        setError(result.message || 'Signup failed. Please try again.');
       }
     } catch (err) {
       setError('Signup failed. Please try again.');
@@ -69,7 +80,7 @@ export function Signup() {
             <Sprout className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-3xl font-bold mb-2">Create Account</h1>
-          <p className="text-muted-foreground">Join AgriTech to optimize your farming</p>
+          <p className="text-muted-foreground">Join AgriPredict to optimize your farming</p>
         </div>
 
         {/* Signup Card */}
@@ -162,6 +173,22 @@ export function Signup() {
                 </div>
 
                 <div className="space-y-2">
+                  <Label htmlFor="city">City / District</Label>
+                  <div className="relative">
+                    <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      id="city"
+                      name="city"
+                      placeholder="e.g. Faisalabad"
+                      value={formData.city}
+                      onChange={handleChange}
+                      className="pl-10"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
                   <Label htmlFor="farmSize">Farm Size</Label>
                   <div className="relative">
                     <Ruler className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -215,6 +242,24 @@ export function Signup() {
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? 'Creating Account...' : 'Create Account'}
               </Button>
+
+              <div className="relative my-4">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-background px-2 text-muted-foreground">
+                    Or continue with
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex justify-center w-full">
+                <GoogleAuthButton
+                  onSuccess={handleGoogleSuccess}
+                  onError={handleGoogleError}
+                />
+              </div>
 
               <div className="text-center">
                 <p className="text-sm text-muted-foreground">

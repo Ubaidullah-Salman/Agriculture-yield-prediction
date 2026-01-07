@@ -7,87 +7,133 @@ interface User {
   role: 'user' | 'admin';
   phone?: string;
   location?: string;
+  city?: string;
   farmSize?: string;
 }
 
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
-  login: (email: string, password: string, role?: 'user' | 'admin') => Promise<boolean>;
-  signup: (userData: Partial<User> & { password: string }) => Promise<boolean>;
+  isLoading: boolean;
+  login: (email: string, password: string) => Promise<boolean>;
+  signup: (userData: Partial<User> & { password: string }) => Promise<{ success: boolean; message?: string }>;
   logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(() => {
+    const savedUser = localStorage.getItem('user');
+    return savedUser ? JSON.parse(savedUser) : null;
+  });
+
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const savedUser = localStorage.getItem('user');
-    if (savedUser) {
-      setUser(JSON.parse(savedUser));
-      setIsAuthenticated(true);
-    }
+    const verifySession = async () => {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/auth/verify', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!response.ok) {
+          throw new Error('Invalid session');
+        }
+
+        const data = await response.json();
+        setUser(data.user);
+        setIsAuthenticated(true);
+      } catch (err) {
+        console.error("Session verification failed:", err);
+        logout();
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    verifySession();
   }, []);
 
-  const login = async (email: string, password: string, role: 'user' | 'admin' = 'user'): Promise<boolean> => {
-    // Mock authentication - in production, this would call a backend API
-    if (role === 'admin' && email === 'admin@agri.com' && password === 'admin123') {
-      const adminUser: User = {
-        id: 'admin1',
-        name: 'Admin User',
-        email: 'admin@agri.com',
-        role: 'admin',
-      };
-      setUser(adminUser);
-      setIsAuthenticated(true);
-      localStorage.setItem('user', JSON.stringify(adminUser));
-      return true;
-    } else if (role === 'user' && password.length >= 6) {
-      const newUser: User = {
-        id: Date.now().toString(),
-        name: email.split('@')[0],
-        email,
-        role: 'user',
-      };
-      setUser(newUser);
-      setIsAuthenticated(true);
-      localStorage.setItem('user', JSON.stringify(newUser));
-      return true;
+  const login = async (email: string, password: string): Promise<boolean> => {
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const userWithRole: User = {
+          id: data.user.id,
+          name: data.user.name,
+          email: data.user.email,
+          role: data.user.role,
+        };
+
+        setUser(userWithRole);
+        setIsAuthenticated(true);
+        localStorage.setItem('user', JSON.stringify(userWithRole));
+        localStorage.setItem('token', data.token); // Store the token!
+        return true;
+      }
+    } catch (error) {
+      console.error("Login failed:", error);
     }
     return false;
   };
 
-  const signup = async (userData: Partial<User> & { password: string }): Promise<boolean> => {
-    // Mock signup - in production, this would call a backend API
-    if (userData.password.length >= 6) {
-      const newUser: User = {
-        id: Date.now().toString(),
-        name: userData.name || '',
-        email: userData.email || '',
-        role: 'user',
-        phone: userData.phone,
-        location: userData.location,
-        farmSize: userData.farmSize,
-      };
-      setUser(newUser);
-      setIsAuthenticated(true);
-      localStorage.setItem('user', JSON.stringify(newUser));
-      return true;
+  const signup = async (userData: Partial<User> & { password: string }): Promise<{ success: boolean; message?: string }> => {
+    try {
+      const response = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(userData),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        if (data.token && data.user) {
+          const userWithRole: User = {
+            id: data.user.id,
+            name: data.user.name,
+            email: data.user.email,
+            role: data.user.role,
+          };
+
+          setUser(userWithRole);
+          setIsAuthenticated(true);
+          localStorage.setItem('user', JSON.stringify(userWithRole));
+          localStorage.setItem('token', data.token);
+        }
+        return { success: true };
+      } else {
+        return { success: false, message: data.message || 'Signup failed' };
+      }
+    } catch (error) {
+      console.error("Signup failed:", error);
+      return { success: false, message: 'Network error. Please try again.' };
     }
-    return false;
   };
 
   const logout = () => {
     setUser(null);
     setIsAuthenticated(false);
     localStorage.removeItem('user');
+    localStorage.removeItem('token');
   };
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated, login, signup, logout }}>
+    <AuthContext.Provider value={{ user, isAuthenticated, isLoading, login, signup, logout }}>
       {children}
     </AuthContext.Provider>
   );

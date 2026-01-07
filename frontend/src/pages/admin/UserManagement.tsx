@@ -4,8 +4,10 @@ import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Label } from '../../components/ui/Label';
 import { Select } from '../../components/ui/Select';
-import { mockUsers } from '../../utils/mockData';
-import { Search, Plus, Edit, Trash2, X, UserPlus } from 'lucide-react';
+// import { mockUsers } from '../../utils/mockData';
+import { Search, Plus, Edit, Trash2, X, UserPlus, Undo2, ArrowUpDown } from 'lucide-react';
+import { toast } from 'sonner';
+import { api } from '../../services/api';
 
 interface User {
   id: string;
@@ -20,8 +22,99 @@ interface User {
 }
 
 export function UserManagement() {
-  const [users, setUsers] = useState<User[]>(mockUsers);
+  const [users, setUsers] = useState<User[]>([]);
+  const [undoLoading, setUndoLoading] = useState(false);
+
+  React.useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  const fetchUsers = async () => {
+    try {
+      // Fetch real users from backend
+      // The api.get helper automatically attaches the Bearer token from localStorage
+      const data: any[] = await api.get('/users/');
+
+      // Map backend snake_case to frontend camelCase
+      const mappedUsers: User[] = data.map((u: any) => ({
+        id: u.id.toString(),
+        name: u.name,
+        email: u.email,
+        phone: u.phone || 'N/A',
+        location: u.location || 'Unknown',
+        farmSize: u.farm_size || 'N/A',
+        joinDate: u.created_at ? new Date(u.created_at).toLocaleDateString() : 'N/A',
+        lastLogin: u.last_login ? new Date(u.last_login).toLocaleDateString() : 'Never',
+        status: u.status || 'active'
+      }));
+
+      setUsers(mappedUsers);
+    } catch (error) {
+      console.error("Failed to fetch users", error);
+      // Optional: Show error to user or empty list
+      setUsers([]);
+    }
+  };
   const [searchTerm, setSearchTerm] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+
+  const handleSearch = async (val: string) => {
+    setSearchTerm(val);
+    if (!val.trim()) {
+      fetchUsers();
+      return;
+    }
+
+    setIsSearching(true);
+    try {
+      const data: any = await api.get(`/users/search?q=${encodeURIComponent(val)}`);
+      // If result is a single user object, wrap in array
+      const results = Array.isArray(data) ? data : [data];
+
+      const mappedResults: User[] = results.map((u: any) => ({
+        id: u.id.toString(),
+        name: u.name,
+        email: u.email,
+        phone: u.phone || 'N/A',
+        location: u.location || 'Unknown',
+        farmSize: u.farm_size || 'N/A',
+        joinDate: u.created_at ? new Date(u.created_at).toLocaleDateString() : 'N/A',
+        lastLogin: u.last_login ? new Date(u.last_login).toLocaleDateString() : 'Never',
+        status: u.status || 'active'
+      }));
+      setUsers(mappedResults);
+    } catch (error) {
+      console.log("No users found via Binary Search", error);
+      setUsers([]);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleUndo = async () => {
+    setUndoLoading(true);
+    try {
+      const res: any = await api.post('/admin/undo', {});
+      toast.success(res.message || 'Undo successful');
+      fetchUsers();
+    } catch (error) {
+      toast.error('Nothing to undo');
+    } finally {
+      setUndoLoading(false);
+    }
+  };
+
+  const toggleUserStatus = async (user: User) => {
+    const newStatus = user.status === 'active' ? 'inactive' : 'active';
+    try {
+      await api.put(`/users/${user.id}`, { status: newStatus });
+      toast.success(`User marked as ${newStatus}`);
+      fetchUsers();
+    } catch (error) {
+      toast.error('Failed to update status');
+    }
+  };
+
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -33,44 +126,50 @@ export function UserManagement() {
     farmSize: '',
   });
 
-  const filteredUsers = users.filter(
-    (user) =>
-      user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.location.toLowerCase().includes(searchTerm.toLowerCase())
-  );
 
-  const handleAddUser = (e: React.FormEvent) => {
+  const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    const newUser: User = {
-      id: Date.now().toString(),
-      ...formData,
-      joinDate: new Date().toISOString().split('T')[0],
-      lastLogin: 'Never',
-      status: 'active',
-    };
-    setUsers([...users, newUser]);
-    setShowAddModal(false);
-    setFormData({ name: '', email: '', phone: '', location: '', farmSize: '' });
-  };
-
-  const handleEditUser = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (selectedUser) {
-      setUsers(
-        users.map((user) =>
-          user.id === selectedUser.id ? { ...user, ...formData } : user
-        )
-      );
-      setShowEditModal(false);
-      setSelectedUser(null);
+    try {
+      await api.post('/users/', {
+        ...formData,
+        role: 'user'
+      });
+      toast.success('User created successfully');
+      setShowAddModal(false);
       setFormData({ name: '', email: '', phone: '', location: '', farmSize: '' });
+      fetchUsers();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to create user');
     }
   };
 
-  const handleDeleteUser = (userId: string) => {
+  const handleEditUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (selectedUser) {
+      try {
+        await api.put(`/users/${selectedUser.id}`, {
+          ...formData
+        });
+        toast.success('User updated successfully');
+        setShowEditModal(false);
+        setSelectedUser(null);
+        setFormData({ name: '', email: '', phone: '', location: '', farmSize: '' });
+        fetchUsers();
+      } catch (error: any) {
+        toast.error(error.message || 'Failed to update user');
+      }
+    }
+  };
+
+  const handleDeleteUser = async (userId: string) => {
     if (confirm('Are you sure you want to delete this user?')) {
-      setUsers(users.filter((user) => user.id !== userId));
+      try {
+        await api.delete(`/users/${userId}`);
+        toast.success('User deleted successfully');
+        fetchUsers();
+      } catch (error: any) {
+        toast.error(error.message || 'Failed to delete user');
+      }
     }
   };
 
@@ -100,13 +199,19 @@ export function UserManagement() {
         <div>
           <h1>User Management</h1>
           <p className="text-muted-foreground mt-1">
-            Manage all registered farmers and their information
+            Manage all registered farmers (Sorted by MergeSort)
           </p>
         </div>
-        <Button onClick={() => setShowAddModal(true)}>
-          <Plus className="w-4 h-4 mr-2" />
-          Add User
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={handleUndo} disabled={undoLoading}>
+            <Undo2 className="w-4 h-4 mr-2" />
+            Undo
+          </Button>
+          <Button onClick={() => setShowAddModal(true)}>
+            <Plus className="w-4 h-4 mr-2" />
+            Add User
+          </Button>
+        </div>
       </div>
 
       {/* Search and Filter */}
@@ -116,11 +221,16 @@ export function UserManagement() {
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
-                placeholder="Search by name, email, or location..."
+                placeholder="Search by name (Binary Search Powered)..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => handleSearch(e.target.value)}
                 className="pl-10"
               />
+              {isSearching && (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground animate-pulse">
+                  Searching...
+                </div>
+              )}
             </div>
           </div>
         </CardContent>
@@ -129,7 +239,7 @@ export function UserManagement() {
       {/* Users Table */}
       <Card>
         <CardHeader>
-          <CardTitle>All Users ({filteredUsers.length})</CardTitle>
+          <CardTitle>All Users ({users.length})</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -148,7 +258,7 @@ export function UserManagement() {
                 </tr>
               </thead>
               <tbody>
-                {filteredUsers.map((user) => (
+                {users.map((user) => (
                   <tr key={user.id} className="border-b border-border hover:bg-accent transition-colors">
                     <td className="p-3">{user.name}</td>
                     <td className="p-3 text-sm text-muted-foreground">{user.email}</td>
@@ -160,8 +270,8 @@ export function UserManagement() {
                     <td className="p-3">
                       <span
                         className={`px-2 py-1 rounded-full text-xs ${user.status === 'active'
-                            ? 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400'
-                            : 'bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400'
+                          ? 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400'
+                          : 'bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400'
                           }`}
                       >
                         {user.status}
@@ -175,6 +285,13 @@ export function UserManagement() {
                           title="Edit"
                         >
                           <Edit className="w-4 h-4 text-primary" />
+                        </button>
+                        <button
+                          onClick={() => toggleUserStatus(user)}
+                          className="p-1 hover:bg-amber-100 dark:hover:bg-amber-900/20 rounded transition-colors"
+                          title="Toggle Status"
+                        >
+                          <ArrowUpDown className="w-4 h-4 text-amber-500" />
                         </button>
                         <button
                           onClick={() => handleDeleteUser(user.id)}

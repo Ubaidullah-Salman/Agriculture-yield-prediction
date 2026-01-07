@@ -3,11 +3,17 @@ from sqlalchemy import func
 from datetime import datetime, timedelta
 import geoip2.database
 import user_agents
+from utils.dsa import Graph
 
 class NetworkMonitor:
     def __init__(self):
-        # In a real app, we'd use a real GeoIP database
-        # self.reader = geoip2.database.Reader('GeoLite2-City.mmdb')
+        # DSA ROADMAP: Use Graph to track region-to-region network topology
+        self.topology = Graph()
+        # Mocking some regional connections
+        self.topology.add_edge('North', 'Central', weight=20)
+        self.topology.add_edge('Central', 'South', weight=15)
+        self.topology.add_edge('South', 'West', weight=30)
+        self.topology.add_edge('West', 'North', weight=25)
         pass
         
     def log_metric(self, user_id, ip_address, user_agent_str, latency, client_data=None):
@@ -53,16 +59,26 @@ class NetworkMonitor:
             func.count(NetworkMetric.id).label('count')
         ).group_by(NetworkMetric.region).all()
         
-        return [
-            {
-                'region': r.region or 'Unknown',
-                'latency': round(r.avg_latency, 1) if r.avg_latency else 0,
-                'packetLoss': round(r.avg_loss, 2) if r.avg_loss else 0,
-                'users': r.count,
-                'quality': 'Excellent' if (r.avg_latency or 0) < 100 else 'Good'
-            }
-            for r in results
-        ]
+        # Organize results by region for quick lookup
+        stats_map = {r.region: r for r in results}
+        
+        # DSA ROADMAP: Use BFS to analyze connectivity from a reference region (e.g., 'North')
+        reachable_regions = self.topology.bfs('North')
+        
+        # Always return all regions in our topology
+        final_stats = []
+        for region_name in self.topology.nodes:
+            stats = stats_map.get(region_name)
+            final_stats.append({
+                'region': region_name,
+                'latency': round(stats.avg_latency, 1) if stats and stats.avg_latency else 0,
+                'packetLoss': round(stats.avg_loss, 2) if stats and stats.avg_loss else 0,
+                'users': stats.count if stats else 0,
+                'quality': 'Excellent' if not stats or (stats.avg_latency or 0) < 100 else 'Good',
+                'isReachable': region_name in reachable_regions # DSA Insight
+            })
+            
+        return final_stats
 
     def get_isp_performance(self):
         results = db.session.query(

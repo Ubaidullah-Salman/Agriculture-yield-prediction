@@ -5,16 +5,27 @@ import datetime
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
 import os
+from utils.dsa import LRUCache
 
 auth_bp = Blueprint('auth', __name__)
+
+# DSA ROADMAP: LRU Cache for Session/Token management
+session_cache = LRUCache(capacity=50)
 
 @auth_bp.route('/signup', methods=['POST'])
 def signup():
     data = request.get_json()
     
     # Basic validation
-    if not data or not data.get('email') or not data.get('password') or not data.get('name'):
-        return jsonify({'message': 'Missing required fields'}), 400
+    # Basic validation
+    if not data:
+        return jsonify({'message': 'No data provided'}), 400
+    if not data.get('name'):
+        return jsonify({'message': 'Full Name is required'}), 400
+    if not data.get('email'):
+        return jsonify({'message': 'Email Address is required'}), 400
+    if not data.get('password'):
+        return jsonify({'message': 'Password is required'}), 400
         
     if User.query.filter_by(email=data.get('email')).first():
         return jsonify({'message': 'Email already exists'}), 409
@@ -26,14 +37,26 @@ def signup():
             role=data.get('role', 'user'),
             phone=data.get('phone'),
             location=data.get('location'),
-            farm_size=data.get('farm_size')
+            farm_size=data.get('farmSize') or data.get('farm_size')
         )
         new_user.set_password(data.get('password'))
         
+        new_user.last_login = datetime.datetime.utcnow()
         db.session.add(new_user)
         db.session.commit()
         
-        return jsonify({'message': 'User created successfully', 'user': new_user.to_dict()}), 201
+        # Generate token for auto-login
+        token = jwt.encode({
+            'user_id': new_user.id,
+            'role': new_user.role,
+            'exp': datetime.datetime.utcnow() + datetime.timedelta(seconds=current_app.config['JWT_ACCESS_TOKEN_EXPIRES'])
+        }, current_app.config['JWT_SECRET_KEY'], algorithm="HS256")
+        
+        return jsonify({
+            'message': 'User created successfully', 
+            'user': new_user.to_dict(),
+            'token': token
+        }), 201
     except Exception as e:
         db.session.rollback()
         return jsonify({'message': str(e)}), 500
@@ -61,19 +84,25 @@ def login():
         'exp': datetime.datetime.utcnow() + datetime.timedelta(seconds=current_app.config['JWT_ACCESS_TOKEN_EXPIRES'])
     }, current_app.config['JWT_SECRET_KEY'], algorithm="HS256")
     
+    # DSA ROADMAP: Store session in LRU Cache
+    session_cache.put(token, user.to_dict())
+
     return jsonify({
         'token': token,
         'user': user.to_dict()
     }), 200
 
 @auth_bp.route('/verify', methods=['GET'])
-# We'll need to import token_required from middleware, but to avoid circular imports 
-# in this file structure, we'll do the import inside the function or fix the structure later.
-# For now, let's assume middleware is available or import it at top if possible.
 def verify_token():
     from middleware.auth_middleware import token_required
     from flask import g
     
+    # DSA ROADMAP: Check LRU Cache first for instant verification
+    token = request.headers.get('Authorization', '').split(" ")[-1]
+    cached_user = session_cache.get(token)
+    if cached_user:
+        return jsonify({'valid': True, 'user': cached_user, 'source': 'dsa_cache'}), 200
+
     @token_required
     def _verify():
         return jsonify({'valid': True, 'user': g.current_user.to_dict()}), 200

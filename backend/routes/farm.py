@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify, g
 from models import db, Farm
 from middleware.auth_middleware import token_required
+from utils.dsa import admin_stack
 
 farm_bp = Blueprint('farm', __name__)
 
@@ -31,6 +32,24 @@ def create_farm():
         
         db.session.add(new_farm)
         db.session.commit()
+        
+        # DSA ROADMAP: Push to undo stack
+        admin_stack.push({
+            'type': 'farm_creation',
+            'farm_id': new_farm.id,
+            'user_id': g.current_user.id,
+            'action': f"Registered farm '{new_farm.name}'"
+        })
+        
+        # Trigger notification
+        from utils.notification_helper import create_notification
+        create_notification(
+            user_id=g.current_user.id,
+            title="Farm Registered",
+            message=f"Successfully registered '{new_farm.name}' in {new_farm.location}.",
+            notif_type='success'
+        )
+        
         return jsonify(new_farm.to_dict()), 201
     except Exception as e:
         db.session.rollback()
@@ -42,6 +61,9 @@ def update_farm(farm_id):
     farm = Farm.query.filter_by(id=farm_id, user_id=g.current_user.id).first_or_404()
     data = request.get_json()
     
+    # DSA ROADMAP: Capture old data for undo
+    old_data = farm.to_dict()
+    
     if 'name' in data: farm.name = data['name']
     if 'location' in data: farm.location = data['location']
     if 'size_acres' in data: farm.size_acres = float(data['size_acres'])
@@ -52,6 +74,15 @@ def update_farm(farm_id):
     
     try:
         db.session.commit()
+        
+        # DSA ROADMAP: Push to undo stack
+        admin_stack.push({
+            'type': 'farm_update',
+            'farm_id': farm_id,
+            'user_id': g.current_user.id,
+            'old_data': old_data,
+            'action': f"Updated farm '{farm.name}'"
+        })
         return jsonify(farm.to_dict()), 200
     except Exception as e:
         db.session.rollback()
@@ -61,7 +92,17 @@ def update_farm(farm_id):
 @token_required
 def delete_farm(farm_id):
     farm = Farm.query.filter_by(id=farm_id, user_id=g.current_user.id).first_or_404()
+    farm_data = farm.to_dict() # Capture for undo
     try:
+        # DSA ROADMAP: Push to undo stack
+        admin_stack.push({
+            'type': 'farm_deletion',
+            'farm_id': farm_id,
+            'user_id': g.current_user.id,
+            'farm_data': farm_data,
+            'action': f"Deleted farm '{farm.name}'"
+        })
+        
         db.session.delete(farm)
         db.session.commit()
         return jsonify({'message': 'Farm deleted successfully'}), 200

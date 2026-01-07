@@ -3,13 +3,38 @@ from werkzeug.utils import secure_filename
 from models import db, Prediction, User
 from middleware.auth_middleware import token_required
 from ml_models.model_loader import ModelLoader
+from utils.dsa import DecisionTree, LinkedList, MinHeap
 import os
 import json
 import uuid
+import datetime
 import jwt
 
 predictions_bp = Blueprint('predictions', __name__)
 loader = ModelLoader()
+
+# DSA INTEGRATION: Decision Tree Rules for Crop Recommendation
+# Features: N, P, K, temperature, humidity, ph, rainfall
+recommendation_tree = DecisionTree({
+    'feature': 'rainfall',
+    'threshold': 100,
+    'left': { # Low rainfall
+        'feature': 'temperature',
+        'threshold': 30,
+        'left': 'Wheat',
+        'right': 'Cotton'
+    },
+    'right': { # High rainfall
+        'feature': 'ph',
+        'threshold': 7.0,
+        'left': 'Rice',
+        'right': 'Maize'
+    }
+})
+
+# DSA ROADMAP: Linked List for session history and Heap for request priority
+session_history = LinkedList(max_size=10)
+request_prioritizer = MinHeap()
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in {'png', 'jpg', 'jpeg'}
@@ -42,7 +67,18 @@ def predict_yield():
             'confidence': 85.0  # RandomForest doesn't give confidence easily for regression, mocking
         }
         
-        # Save to DB only if user is logged in
+        # DSA ROADMAP: Add to Linked List history
+        session_history.add({
+            'type': 'yield',
+            'input': data,
+            'result': result,
+            'timestamp': str(datetime.datetime.utcnow())
+        })
+        
+        # DSA ROADMAP: Prioritize based on farm size (larger farms = lower priority for demo/balanced load)
+        priority = float(data.get('area', 1.0))
+        request_prioritizer.push(f"yield_{uuid.uuid4()}", priority)
+
         # Save to DB only if user is logged in
         if current_user_id:
             try:
@@ -54,6 +90,15 @@ def predict_yield():
                 )
                 db.session.add(prediction)
                 db.session.commit()
+                
+                # Trigger notification
+                from utils.notification_helper import create_notification
+                create_notification(
+                    user_id=current_user_id,
+                    title="Yield Prediction Ready",
+                    message=f"System calculated {result['predicted_yield']} maunds/acre based on your data.",
+                    notif_type='success'
+                )
             except Exception as db_e:
                 print(f"DB Error (Non-fatal): {db_e}")
                 # We don't fail the request if DB fails
@@ -91,11 +136,16 @@ def predict_recommendation():
             pass
 
     try:
-        # Run prediction
-        crop_name = loader.predict_recommendation(data)
+        # Run ML prediction
+        ml_crop = loader.predict_recommendation(data)
+        
+        # DSA INTEGRATION: Run manual Decision Tree prediction
+        dsa_crop = recommendation_tree.predict(data)
+        
         result = {
-            'recommended_crop': crop_name,
-            'confidence': 95.0 # Random Forest is generally high confidence for this dataset
+            'recommended_crop': ml_crop,
+            'dsa_recommendation': dsa_crop, # Show both for technical depth
+            'confidence': 95.0 
         }
         
         # Save to DB if logged in
@@ -108,6 +158,23 @@ def predict_recommendation():
             )
             db.session.add(prediction)
             db.session.commit()
+            
+            # DSA ROADMAP: Add to Linked List history
+            session_history.add({
+                'type': 'recommendation',
+                'input': data,
+                'result': result,
+                'timestamp': str(datetime.datetime.utcnow())
+            })
+            
+            # Trigger notification
+            from utils.notification_helper import create_notification
+            create_notification(
+                user_id=current_user_id,
+                title="Crop Recommendation Generated",
+                message=f"Our AI recommends planting {result['recommended_crop']}. View full details.",
+                notif_type='info'
+            )
             
         return jsonify(result), 200
         
@@ -155,6 +222,23 @@ def detect_pest():
                 )
                 db.session.add(prediction)
                 db.session.commit()
+                
+                # DSA ROADMAP: Add to Linked List history
+                session_history.add({
+                    'type': 'pest',
+                    'input': {'filename': filename},
+                    'result': result,
+                    'timestamp': str(datetime.datetime.utcnow())
+                })
+                
+                # Trigger notification
+                from utils.notification_helper import create_notification
+                create_notification(
+                    user_id=current_user_id,
+                    title="Pest Analysis Complete",
+                    message=f"Detection finished: {result.get('label', 'No issues detected')}. View report.",
+                    notif_type='warning' if 'healthy' not in result.get('label', '').lower() else 'success'
+                )
             
             return jsonify(result), 200
         except Exception as e:
@@ -170,11 +254,19 @@ def detect_pest():
 @predictions_bp.route('/history', methods=['GET'])
 @token_required
 def get_history():
+    # DSA ROADMAP: Use Linked List history for recently active session
+    history_list = session_history.get_all()
+    
     pred_type = request.args.get('type')
     query = Prediction.query.filter_by(user_id=g.current_user.id)
     
     if pred_type:
         query = query.filter_by(prediction_type=pred_type)
         
-    predictions = query.order_by(Prediction.created_at.desc()).limit(20).all()
-    return jsonify([p.to_dict() for p in predictions]), 200
+    db_predictions = query.order_by(Prediction.created_at.desc()).limit(20).all()
+    
+    return jsonify({
+        'session_history': history_list,
+        'db_history': [p.to_dict() for p in db_predictions]
+    }), 200
+
